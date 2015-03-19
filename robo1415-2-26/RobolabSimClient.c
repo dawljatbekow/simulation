@@ -1,4 +1,4 @@
-#include "../h/Configuration.h"
+ #include "../h/Configuration.h"
 
 
 typedef struct Kreuzung
@@ -14,7 +14,12 @@ typedef struct Koordinaten //Datentyp für Kreuzungen und Kanten
 	float y;
 }Koordinaten;
 
-
+struct Kreuzung pa; //Aktueller Standort
+struct Koordinaten Strecke[147];//Aufzeichnung von Kreuzungen
+struct Koordinaten snake[147];//Aufzeichnung von Kanten
+int s;
+int t;
+int n;
 
 int hasNorth(int value) {
 	if(value==16 || value==144 || value==80 || value== 48 || value==176 || value==112 || value==208 || value==240) return(1);
@@ -31,104 +36,98 @@ int hasWest(int value){
 	else return(0);
 }
 int hasEast(int value){
-	if(value==128|| value==144 || value==192 || value==160 || value==176 || value==224 || value==208 ||240)return(1);
+	if(value==128|| value==144 || value==192 || value==160 || value==176 || value==224 || value==208 ||value==240)return(1);
 	else return(0);
 }
 
-void xgehen(Koordinaten **snake,Koordinaten **Strecke,Kreuzung *pa,int Richtung,int s, int t){
-	int i=0;
-	do{ //Kontrolle ob der Roboter schon mal an der Kante gelaufen ist
-		if(snake[i]->y==pa->y+Richtung/2){
-			i=t;
+int Kontrolle(float Richtungx,float Richtungy){ // Kontrolle ob der Roboter schon mal auf der Kante gelaufen ist
+	int i;
+	for(i=0;i<=t;i++){
+		if(snake[i].y==pa.y+Richtungy/2.0 && snake[i].x==pa.x+Richtungx/2.0){
+			return 0;
+			break;
 		}
-		else {
-			Robot_Move(pa->x+Richtung,pa->y);
-			snake[s]->y=pa->y;
-			snake[s]->x=pa->x+Richtung/2;
-			s++;
-			(pa->y)++;
-			Strecke[s]->x=pa->x;
-			Strecke[s]->y=pa->y;
-			i=t;
-		}
-		i++;
-
-	}while(i<=t);
+	}
+return 1;
 }
 
-void ygehen(Koordinaten **snake,Koordinaten **Strecke,Kreuzung *pa,int Richtung, int s, int t){
-	int i=0;
-	do{ //Kontrolle ob der Roboter schon mal an der Kante gelaufen ist
-		if(snake[i]->y==pa->y+Richtung/2){
-			i=t; //abbruch
-		}
-		else {
-			Robot_Move(pa->x,pa->y+Richtung);
-			snake[s]->y=pa->y+Richtung/2;
-			snake[s]->x=pa->x;
-			s++;
-			(pa->y)++;
-			Strecke[s]->x=pa->x;
-			Strecke[s]->y=pa->y;
-			i=t; //abbruch
-		}
-		i++;
-
-	}while(i<=t);
+void gehen(float Richtungx, float Richtungy){ //funktion für das gehen auf neuen Wegen, Richtung ist entweder |1| oder NUll,
+	//wobei einer der Richtung durch das fehlen diagonaler Linien immer NUll ist
+	if(Robot_Move(pa.x+Richtungx,pa.y+Richtungy)==0x02)n++; //Robot_Move wird auch in einer if abfrage ausgeführt
+	s++; //Erhöhung des Zählers für Strecke
+	t++; //Erhöhung des Zählers für snake
+	snake[t].y=pa.y+Richtungy/2.0; //Speicherung der gegangenen Kante für die Überprüfung der schon gegangenen Kanten
+	snake[t].x=pa.x+Richtungx/2.0;
+	pa.y=pa.y+Richtungy; //Änderung des aktuellen Standorts
+	pa.x=pa.x+Richtungx;
+	Strecke[s].x=pa.x; //Speicherung des Punktes für den Rückweg
+	Strecke[s].y=pa.y;
 }
 
-void suchen(Koordinaten snake[],Koordinaten Strecke[],Kreuzung pa){
-	int n=0; //Zähler für die Anzahl an gefundenen Gegenständen
-	int s=0;// Zähler für die Anzahl an passierten Kreuzungen
-	int t=-1;//Zähler für Anzahl unterschiedlicher Kanten
+
+void suchen(){
+	n=0; //Zähler für die Anzahl an gefundenen Gegenständen
+	s=0;// Zähler für die Anzahl an passierten Kreuzungen
+	t=-1;//Zähler für Anzahl unterschiedlicher Kanten
 	while(n!=3){
-		pa.Gabelung= Robot_GetIntersections();
-		t++;
-		if(hasNorth(pa.Gabelung)!=0){
-			ygehen(&snake,&Strecke,&pa,1,s,t);
-		}
-		if(hasSouth(pa.Gabelung)!=0){
-			ygehen(&snake,&Strecke,&pa,-1,s,t);}
-		if(hasEast(pa.Gabelung)!=0){
-			xgehen(&snake,&Strecke,&pa,-1,s,t);}
-		if(hasWest(pa.Gabelung)!=0){
-			xgehen(&snake,&Strecke,&pa,1,s,t);}
+		pa.Gabelung= Robot_GetIntersections(); //Einlesen der Hexadizimalen Zahl, die den Typ der Kreuzung bestimmt
+		if(hasNorth(pa.Gabelung)!=0 && Kontrolle(0,1)==1) gehen(0,1); //kontrolliert ob er nach norden gehen kann und ob er da schon war
+		else if(hasSouth(pa.Gabelung)!=0 && Kontrolle(0,-1)==1) gehen(0,-1); //Süden
+		else if(hasEast(pa.Gabelung)!=0 && Kontrolle(1,0)==1) gehen(1,0); //Osten
+		else if(hasWest(pa.Gabelung)!=0 && Kontrolle(-1,0)==1) gehen(-1,0); //Westen
 		else{
-			Robot_Move(Strecke[s-1].x,Strecke[s-1].y);
+			//Zurückgehen aus einer Sackgasse
+			if (Robot_Move(Strecke[s-1].x,Strecke[s-1].y)==0x02)n++;
 			pa.x=Strecke[s-1].x;
 			pa.y=Strecke[s-1].y;
-			s++;
-			Strecke[s].x=Strecke[s-2].x;
-			Strecke[s].y=Strecke[s-2].y;
-			t--;
+			Strecke[s].x=Strecke[s-1].x; //Löschen der doppelten Kreuzung
+			Strecke[s].y=Strecke[s-1].y;
+			s--;
 		}
 	}
-	while(s!=0){
-		int i;
-		for(i=0;i<s-1;i++){
-			if (snake[s].x==snake[i].x+1 || snake[s].x==snake[i].x-1 || snake[s].y==snake[i].y+1 || snake[s].y==snake[i].y-1){
-				s=i; //(*snake)[i]
-				break;
-			}
-			Robot_Move(snake[s].x,snake[s].y);}
-	}
+
 return ;
 }
 
+void rueckkehr(void){ //
+	int i;
+	while(s!=0){//Solange er nicht wieder am start ist(Strecke[s=0] ist natürlich der Startpunkt
+		for(i=0;i<s-1;i++){
+			if (Strecke[s].x+1==Strecke[i].x && Strecke[s].y==Strecke[i].y && (hasEast(Robot_GetIntersections())==1)) {//Kontrolle ob ein Punkt in Östlicher Richtung
+				//schon befahren wurde und ob eine Verbindung zu ihm Existiert
+				Robot_Move(Strecke[i].x,Strecke[i].y);
+				break;}
+			else if (Strecke[s].x-1==Strecke[i].x && Strecke[s].y==Strecke[i].y && (hasWest(Robot_GetIntersections())==1)) {//Analog oben
+				Robot_Move(Strecke[i].x,Strecke[i].y);
+				break;}
+			else if (Strecke[s].y+1==Strecke[i].y && Strecke[s].x==Strecke[i].x && (hasNorth(Robot_GetIntersections())==1)) {
+				Robot_Move(Strecke[i].x,Strecke[i].y);
+				break;}
+			else if (Strecke[s].y-1==Strecke[i].y && Strecke[s].x==Strecke[i].x  && (hasSouth(Robot_GetIntersections())==1)) {
+				Robot_Move(Strecke[i].x,Strecke[i].y);
+				break;}
+			}
+		if(i==s-1){ //Wenn Die oben genannten Fälle nicht eingetreten sind, dann läuft er auf seinem letzten Weg zurück
+		s--;
+		Robot_Move(Strecke[s].x,Strecke[s].y);}
+		else s=i;
+}
+return ;
+}
 
-
-
-int main(void) {
-	struct Kreuzung pa; //Aktueller Standort
-	struct Koordinaten Strecke[147];//Aufzeichnung von Kreuzungen
-	struct Koordinaten snake[147];//Aufzeichnung von Kanten
+int main(void){
 	pa.x=0;
 	pa.y=0;
 	Strecke[0].x=0;
 	Strecke[0].y=0;
 	snake[0].x=0;
 	snake[0].y=0;
-	suchen(snake,Strecke,pa);
+	if (hasNorth(Robot_GetIntersections())==1){ snake[0].y=0.5;}
+	else if (hasSouth(Robot_GetIntersections())==1){ snake[0].y=-0.5;}
+	else if (hasEast(Robot_GetIntersections())==1){ snake[0].x=0.5;}
+	else if (hasWest(Robot_GetIntersections())==1){ snake[0].y=-0.5;}
+	suchen();
+	rueckkehr();
 
 	return EXIT_SUCCESS;
 }
